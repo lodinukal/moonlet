@@ -35,7 +35,7 @@ const moonlet = @import("root.zig");
 
 // Debug/test output
 const dumpTokensDuringTests = false;
-const veryVerboseLexing = false;
+const very_verbose_lexing = false;
 
 pub const Token = struct {
     id: Id,
@@ -118,6 +118,7 @@ pub const Token = struct {
         ne,
         floor_div,
         skinny_arrow,
+        begin_generic,
         number,
         name,
         string,
@@ -180,6 +181,7 @@ pub const Token = struct {
             .ne => "~=",
             .floor_div => "//",
             .skinny_arrow => "->",
+            .begin_generic => "<generic>",
             .number => "<number>",
             .name => "<name>",
             .string => "<string>",
@@ -302,6 +304,9 @@ pub const Lexer = struct {
     /// This is the equivalent of that.
     max_lexical_element_size: usize = (std.math.maxInt(usize) - 2) / 2,
 
+    /// is set when < proceeds an identifier, so next will return a begin_generic token
+    is_next_generic_begin: bool = false,
+
     pub const Error = LexError;
 
     pub fn init(buffer: []const u8, chunk_name: []const u8) Self {
@@ -344,7 +349,7 @@ pub const Lexer = struct {
 
     pub fn next(self: *Self) Error!Token {
         const start_index = self.index;
-        if (veryVerboseLexing) {
+        if (very_verbose_lexing) {
             if (self.index < self.buffer.len) {
                 std.debug.print("{d}:'{c}'", .{ self.index, self.buffer[self.index] });
             } else {
@@ -358,6 +363,16 @@ pub const Lexer = struct {
             .char = null,
             .line_number = self.line_number,
         };
+
+        if (self.is_next_generic_begin) {
+            self.is_next_generic_begin = false;
+            result.end = self.index;
+            result.id = .begin_generic;
+            self.index += 1;
+
+            return result;
+        }
+
         var state: State = .start;
         var string_delim: u8 = undefined;
         var string_level: usize = 0;
@@ -372,7 +387,7 @@ pub const Lexer = struct {
         var number_is_null_terminated: bool = false;
         while (self.index < self.buffer.len) : (self.index += 1) {
             const c = self.buffer[self.index];
-            if (veryVerboseLexing) std.debug.print(":{s}", .{@tagName(state)});
+            if (very_verbose_lexing) std.debug.print(":{s}", .{@tagName(state)});
             // Check for tokens that are over the size limit here as a catch-all
             if (self.index - result.start >= self.max_lexical_element_size) {
                 return self.reportLexError(LexError.LexicalElementTooLong, result, .eof);
@@ -434,6 +449,9 @@ pub const Lexer = struct {
                         const name = self.buffer[result.start..self.index];
                         if (Token.Keyword.idFromName(name)) |id| {
                             result.id = id;
+                        }
+                        if (c == '<') {
+                            self.is_next_generic_begin = true;
                         }
                         break;
                     },
@@ -858,7 +876,7 @@ pub const Lexer = struct {
             }
         }
 
-        if (veryVerboseLexing) {
+        if (very_verbose_lexing) {
             if (self.index < self.buffer.len) {
                 std.debug.print(":{d}:'{c}'=\"{s}\"\n", .{ self.index, self.buffer[self.index], self.buffer[result.start..self.index] });
             } else {
@@ -869,6 +887,8 @@ pub const Lexer = struct {
         if (result.id == .single_char) {
             result.char = self.buffer[result.start];
         }
+
+        // std.log.info("{s}", .{self.buffer[result.start..result.end]});
 
         result.end = self.index;
         return result;
@@ -882,6 +902,8 @@ pub const Lexer = struct {
             .chunk_name = self.chunk_name,
             .check_next_bug_compat = self.check_next_bug_compat,
             .long_str_nesting_compat = self.long_str_nesting_compat,
+
+            .is_next_generic_begin = self.is_next_generic_begin,
         };
         return lookaheadLexer.next();
     }
@@ -1062,7 +1084,7 @@ test "= and compound = operators" {
     try testLex("a=b", &[_]Token.Id{ .name, .single_char, .name });
     try testLex("a==b", &[_]Token.Id{ .name, .eq, .name });
     try testLex(">=", &[_]Token.Id{.ge});
-    try testLex("if a~=b and a<=b and b<a then end", &[_]Token.Id{
+    try testLex("if a~=b and a <= b and b < a then end", &[_]Token.Id{
         .keyword_if,
         .name,
         .ne,
@@ -1090,6 +1112,11 @@ test "compound operators" {
     try testLex("a^=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
     try testLex("a..=b", &[_]Token.Id{ .name, .concat, .single_char, .name });
     try testLex("a//=b", &[_]Token.Id{ .name, .floor_div, .single_char, .name });
+}
+
+test "generic" {
+    try testLex("f<T, U>", &[_]Token.Id{ .name, .begin_generic, .name, .single_char, .name, .single_char });
+    try testLex("e:f<T, U>", &[_]Token.Id{ .name, .single_char, .name, .begin_generic, .name, .single_char, .name, .single_char });
 }
 
 test "numbers" {
@@ -1225,7 +1252,7 @@ test "5.1 check_next bug compat off" {
 }
 
 fn expectLexError(expected: LexError, actual: anytype) !void {
-    if (veryVerboseLexing) std.debug.print("\n", .{});
+    if (very_verbose_lexing) std.debug.print("\n", .{});
     try std.testing.expectError(expected, actual);
     if (dumpTokensDuringTests) std.debug.print("{!}\n", .{actual});
 }

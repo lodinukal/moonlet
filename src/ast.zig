@@ -103,6 +103,7 @@ pub const Node = struct {
     pub const Call = struct {
         base: Node = .{ .id = .call },
         expression: *Node,
+        generic_arguments: ?Type.Generic,
         arguments: []*Node,
         open_args_token: ?Token,
         close_args_token: ?Token,
@@ -255,6 +256,14 @@ pub const Node = struct {
 
     // :moonlet changes
     pub const Type = struct {
+        /// anything that can exist between < and >
+        pub const Generic = struct {
+            names: []Token = &.{},
+            default_types: []?*Type = &.{},
+            is_pack: []bool = &.{},
+            start_token: Token,
+        };
+
         pub const Inner = union(enum) {
             // singleton nil
             nil,
@@ -281,6 +290,7 @@ pub const Node = struct {
 
             // <generics> tuple -> tuple
             function: struct {
+                generic: ?Generic = null,
                 /// a tuple
                 params: *Type,
                 /// a tuple

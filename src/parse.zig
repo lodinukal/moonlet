@@ -46,7 +46,10 @@ pub const ParseError = error{
     VarArgOutsideVarArgFunction,
 
     // :moonlet changes
+    ExpectedGeneric,
     ExpectedType,
+    ExpectedFunctionType,
+    CallGeneric,
     // :moonlet end changes
 };
 
@@ -65,7 +68,10 @@ pub const parse_error_strings = AutoComptimeLookup(ParseError, []const u8, .{
     .{ ParseError.AmbiguousSyntax, "ambiguous syntax (function call x new statement)" },
     .{ ParseError.VarArgOutsideVarArgFunction, "cannot use '...' outside a vararg function" },
     // :moonlet changes
+    .{ ParseError.ExpectedGeneric, "expected generic" },
     .{ ParseError.ExpectedType, "expected type" },
+    .{ ParseError.ExpectedFunctionType, "expected function type" },
+    .{ ParseError.CallGeneric, "cannot call a generic" },
     // :moonlet end changes
 });
 
@@ -911,12 +917,17 @@ pub const Parser = struct {
         var arguments = std.ArrayList(*Node).init(self.state.allocator);
         defer arguments.deinit();
 
+        var found_generic: ?Node.Type.Generic = null;
+
         var expression = try self.prefixexp();
         loop: while (true) {
             switch (self.state.token.id) {
                 .single_char => {
                     switch (self.state.token.char.?) {
                         '.' => {
+                            if (found_generic) |_| {
+                                return self.reportParseError(ParseError.CallGeneric);
+                            }
                             const separator = self.state.token;
                             try self.nextToken(); // skip the dot
                             const field_token = try self.checkname();
@@ -931,6 +942,9 @@ pub const Parser = struct {
                             expression.can_be_assigned_to = true;
                         },
                         '[' => {
+                            if (found_generic) |_| {
+                                return self.reportParseError(ParseError.CallGeneric);
+                            }
                             const open_token = self.state.token;
                             try self.nextToken(); // skip the [
                             const index = try self.expr();
@@ -948,6 +962,9 @@ pub const Parser = struct {
                             expression.can_be_assigned_to = true;
                         },
                         ':' => {
+                            if (found_generic) |_| {
+                                return self.reportParseError(ParseError.CallGeneric);
+                            }
                             const separator = self.state.token;
                             try self.nextToken(); // skip the :
                             const field_token = try self.checkname();
@@ -961,18 +978,23 @@ pub const Parser = struct {
                             expression.node = &new_node.base;
                             expression.can_be_assigned_to = false;
 
-                            expression.node = try self.funcargs(expression.node);
+                            expression.node = try self.funcargs(expression.node, null);
                         },
                         '(', '{' => {
-                            expression.node = try self.funcargs(expression.node);
+                            expression.node = try self.funcargs(expression.node, found_generic);
                             expression.can_be_assigned_to = false;
                         },
                         else => break :loop,
                     }
                 },
                 .string => {
-                    expression.node = try self.funcargs(expression.node);
+                    expression.node = try self.funcargs(expression.node, found_generic);
                     expression.can_be_assigned_to = false;
+                },
+                .begin_generic => {
+                    found_generic = (try self.generic()) orelse {
+                        return self.reportParseError(ParseError.ExpectedGeneric);
+                    };
                 },
                 else => break :loop,
             }
@@ -981,7 +1003,7 @@ pub const Parser = struct {
         return expression;
     }
 
-    fn funcargs(self: *Self, expression: *Node) Error!*Node {
+    fn funcargs(self: *Self, expression: *Node, generics: ?Node.Type.Generic) Error!*Node {
         var arguments = std.ArrayList(*Node).init(self.state.allocator);
         defer arguments.deinit();
 
@@ -1025,6 +1047,7 @@ pub const Parser = struct {
         var call = try self.state.arena.create(Node.Call);
         call.* = .{
             .expression = expression,
+            .generic_arguments = generics,
             .arguments = try self.state.arena.dupe(*Node, arguments.items),
             .open_args_token = open_args_token,
             .close_args_token = close_args_token,
@@ -1113,7 +1136,35 @@ pub const Parser = struct {
                 try self.nextToken();
                 return &boolean_singleton.base;
             },
+            .begin_generic => {
+                const got_generic = (try self.generic()) orelse {
+                    return self.reportParseError(ParseError.ExpectedGeneric);
+                };
+                if ((try self.anyty()).cast(.type)) |fn_type| {
+                    if (fn_type.kind != .function) {
+                        return self.reportParseError(ParseError.ExpectedFunctionType);
+                    }
+                    fn_type.kind.function.generic = got_generic;
+                    return &fn_type.base;
+                } else {
+                    return self.reportParseError(ParseError.ExpectedType);
+                }
+            },
             .single_char => {
+                if (self.state.token.char == '<') {
+                    const got_generic = (try self.generic()) orelse {
+                        return self.reportParseError(ParseError.ExpectedGeneric);
+                    };
+                    if ((try self.anyty()).cast(.type)) |fn_type| {
+                        if (fn_type.kind != .function) {
+                            return self.reportParseError(ParseError.ExpectedFunctionType);
+                        }
+                        fn_type.kind.function.generic = got_generic;
+                        return &fn_type.base;
+                    } else {
+                        return self.reportParseError(ParseError.ExpectedType);
+                    }
+                }
                 if (self.state.token.char == '(') {
                     const maybe_function_params = try self.tuplety();
                     if (self.state.token.id == .skinny_arrow) {
@@ -1251,6 +1302,50 @@ pub const Parser = struct {
             .start_token = start_token,
         };
         return &ty.base;
+    }
+
+    // parses a generic <T, U, V...> type
+    fn generic(self: *Self) Error!?Node.Type.Generic {
+        const start_token = self.state.token;
+        if (self.state.token.id != .begin_generic and self.state.token.char != '<')
+            return null;
+        try self.nextToken();
+
+        var names = std.ArrayList(Token).init(self.state.allocator);
+        errdefer names.deinit();
+
+        var default_types = std.ArrayList(?*Node.Type).init(self.state.allocator);
+        errdefer default_types.deinit();
+
+        var is_pack = std.ArrayList(bool).init(self.state.allocator);
+        errdefer is_pack.deinit();
+
+        while (!self.state.token.isChar('>')) {
+            const name = try self.checkname();
+            try names.append(name);
+
+            const packs = try self.testnext(.ellipsis);
+            try is_pack.append(packs);
+
+            if (try self.testcharnext('=')) {
+                const ty = try self.anyty();
+                try default_types.append(ty.cast(.type).?);
+            } else {
+                try default_types.append(null);
+            }
+
+            if (!try self.testcharnext(',')) {
+                break;
+            }
+        }
+
+        try self.checkcharnext('>');
+        return .{
+            .names = names.items,
+            .default_types = default_types.items,
+            .is_pack = is_pack.items,
+            .start_token = start_token,
+        };
     }
 
     fn tokenstr(self: *Self, token: Token) []const u8 {
