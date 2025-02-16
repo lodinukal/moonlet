@@ -49,7 +49,7 @@ pub const ParseError = error{
     ExpectedGeneric,
     ExpectedType,
     ExpectedFunctionType,
-    CallGeneric,
+    IndexGeneric,
     // :moonlet end changes
 };
 
@@ -71,7 +71,7 @@ pub const parse_error_strings = AutoComptimeLookup(ParseError, []const u8, .{
     .{ ParseError.ExpectedGeneric, "expected generic" },
     .{ ParseError.ExpectedType, "expected type" },
     .{ ParseError.ExpectedFunctionType, "expected function type" },
-    .{ ParseError.CallGeneric, "cannot call a generic" },
+    .{ ParseError.IndexGeneric, "cannot index into a generic" },
     // :moonlet end changes
 });
 
@@ -926,7 +926,7 @@ pub const Parser = struct {
                     switch (self.state.token.char.?) {
                         '.' => {
                             if (found_generic) |_| {
-                                return self.reportParseError(ParseError.CallGeneric);
+                                return self.reportParseError(ParseError.IndexGeneric);
                             }
                             const separator = self.state.token;
                             try self.nextToken(); // skip the dot
@@ -943,7 +943,7 @@ pub const Parser = struct {
                         },
                         '[' => {
                             if (found_generic) |_| {
-                                return self.reportParseError(ParseError.CallGeneric);
+                                return self.reportParseError(ParseError.IndexGeneric);
                             }
                             const open_token = self.state.token;
                             try self.nextToken(); // skip the [
@@ -963,7 +963,7 @@ pub const Parser = struct {
                         },
                         ':' => {
                             if (found_generic) |_| {
-                                return self.reportParseError(ParseError.CallGeneric);
+                                return self.reportParseError(ParseError.IndexGeneric);
                             }
                             const separator = self.state.token;
                             try self.nextToken(); // skip the :
