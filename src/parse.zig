@@ -749,6 +749,20 @@ pub const Parser = struct {
                     break;
                 }
             }
+            if (isCompoundingBinaryOperator(self.state.token)) {
+                const operator = self.state.token;
+                try self.nextToken();
+                try self.checkcharnext('=');
+                const right_expression = try self.subexpr(0);
+
+                var local = try self.state.arena.create(Node.CompoundAssignmentStatement);
+                local.* = .{
+                    .variable = variable.node,
+                    .operator = operator,
+                    .value = right_expression.node,
+                };
+                return &local.base;
+            }
             try self.checkcharnext('=');
             _ = try self.explist1(&values);
         }
@@ -1391,10 +1405,24 @@ fn isUnaryOperator(token: Token) bool {
     };
 }
 
+/// for example +=
+fn isCompoundingBinaryOperator(token: Token) bool {
+    return switch (token.id) {
+        .concat => true,
+        .floor_div => true,
+        .single_char => switch (token.char.?) {
+            '+', '-', '*', '/', '%', '^' => true,
+            else => false,
+        },
+        else => false,
+    };
+}
+
 // TODO: move to Token?
 fn isBinaryOperator(token: Token) bool {
     return switch (token.id) {
         .concat, .ne, .eq, .le, .ge, .keyword_and, .keyword_or => true,
+        .floor_div => true,
         .single_char => switch (token.char.?) {
             '+', '-', '*', '/', '%', '^', '<', '>' => true,
             else => false,
@@ -1420,6 +1448,7 @@ fn getBinaryPriority(token: Token) BinaryPriority {
         },
         .concat => BinaryPriority{ .left = 5, .right = 4 },
         .eq, .ne, .le, .ge => BinaryPriority{ .left = 3, .right = 3 },
+        .floor_div => BinaryPriority{ .left = 7, .right = 7 }, // same as /
         .keyword_and => BinaryPriority{ .left = 2, .right = 2 },
         .keyword_or => BinaryPriority{ .left = 1, .right = 1 },
         else => unreachable,

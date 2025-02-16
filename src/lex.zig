@@ -114,6 +114,7 @@ pub const Token = struct {
         ge,
         le,
         ne,
+        floor_div,
         skinny_arrow,
         number,
         name,
@@ -174,6 +175,7 @@ pub const Token = struct {
             .ge => ">=",
             .le => "<=",
             .ne => "~=",
+            .floor_div => "//",
             .skinny_arrow => "->",
             .number => "<number>",
             .name => "<name>",
@@ -321,6 +323,7 @@ pub const Lexer = struct {
         dot,
         concat,
         comment_start,
+        forward_slash,
         short_comment,
         long_comment_start,
         long_comment,
@@ -385,6 +388,9 @@ pub const Lexer = struct {
                     '-' => {
                         // this could be the start of a comment, a long comment, or a single -
                         state = State.dash;
+                    },
+                    '/' => {
+                        state = State.forward_slash;
                     },
                     'a'...'z', 'A'...'Z', '_' => {
                         state = State.identifier;
@@ -499,6 +505,17 @@ pub const Lexer = struct {
                     },
                     '>' => {
                         result.id = Token.Id.skinny_arrow;
+                        self.index += 1;
+                        break;
+                    },
+                    else => {
+                        result.id = Token.Id.single_char;
+                        break;
+                    },
+                },
+                State.forward_slash => switch (c) {
+                    '/' => {
+                        result.id = Token.Id.floor_div;
                         self.index += 1;
                         break;
                     },
@@ -784,6 +801,9 @@ pub const Lexer = struct {
                 State.dash,
                 State.compound_equal,
                 => {
+                    result.id = Token.Id.single_char;
+                },
+                State.forward_slash => {
                     result.id = Token.Id.single_char;
                 },
                 State.concat => {

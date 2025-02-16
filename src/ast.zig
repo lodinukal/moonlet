@@ -33,6 +33,7 @@ pub const Node = struct {
         literal,
         identifier,
         assignment_statement,
+        compound_assignment_statement,
         field_access,
         index_access,
         if_statement,
@@ -61,6 +62,7 @@ pub const Node = struct {
                 .literal => Literal,
                 .identifier => Identifier,
                 .assignment_statement => AssignmentStatement,
+                .compound_assignment_statement => CompoundAssignmentStatement,
                 .field_access => FieldAccess,
                 .index_access => IndexAccess,
                 .if_statement => IfStatement,
@@ -123,6 +125,13 @@ pub const Node = struct {
         values: []*Node,
         is_local: bool,
         annotation: ?*Node,
+    };
+
+    pub const CompoundAssignmentStatement = struct {
+        base: Node = .{ .id = .compound_assignment_statement },
+        variable: *Node,
+        operator: Token,
+        value: *Node,
     };
 
     pub const FieldAccess = struct {
@@ -391,6 +400,15 @@ pub const Node = struct {
                         try value_node.dump(writer, source, indent + 1);
                     }
                 }
+            },
+            .compound_assignment_statement => {
+                const compound_assignment: *const Node.CompoundAssignmentStatement = @alignCast(@fieldParentPtr("base", node));
+                try writer.writeAll("\n");
+                try compound_assignment.variable.dump(writer, source, indent + 1);
+                try writer.writeAll(" ");
+                try writer.writeAll(compound_assignment.operator.display(source));
+                try writer.writeAll("\n");
+                try compound_assignment.value.dump(writer, source, indent + 1);
             },
             .field_access => {
                 const field_access: *const Node.FieldAccess = @alignCast(@fieldParentPtr("base", node));
