@@ -43,6 +43,7 @@ pub const Node = struct {
         do_statement,
         repeat_statement,
         break_statement,
+        continue_statement,
         for_statement_numeric,
         for_statement_generic,
         function_declaration,
@@ -72,6 +73,7 @@ pub const Node = struct {
                 .do_statement => DoStatement,
                 .repeat_statement => RepeatStatement,
                 .break_statement => BreakStatement,
+                .continue_statement => ContinueStatement,
                 .for_statement_numeric => ForStatementNumeric,
                 .for_statement_generic => ForStatementGeneric,
                 .function_declaration => FunctionDeclaration,
@@ -186,6 +188,11 @@ pub const Node = struct {
 
     pub const BreakStatement = struct {
         base: Node = .{ .id = .break_statement },
+        token: Token,
+    };
+
+    pub const ContinueStatement = struct {
+        base: Node = .{ .id = .continue_statement },
         token: Token,
     };
 
@@ -479,6 +486,9 @@ pub const Node = struct {
                 try repeat_statement.condition.dump(writer, source, indent + 1);
             },
             .break_statement => {
+                try writer.writeAll("\n");
+            },
+            .continue_statement => {
                 try writer.writeAll("\n");
             },
             .for_statement_numeric => {

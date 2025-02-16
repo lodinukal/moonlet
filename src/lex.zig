@@ -60,6 +60,7 @@ pub const Token = struct {
     const keyword_mapping = .{
         .{ "and", .keyword_and },
         .{ "break", .keyword_break },
+        .{ "continue", .keyword_continue },
         .{ "do", .keyword_do },
         .{ "else", .keyword_else },
         .{ "elseif", .keyword_elseif },
@@ -86,6 +87,7 @@ pub const Token = struct {
         // terminal symbols denoted by reserved words
         keyword_and,
         keyword_break,
+        keyword_continue,
         keyword_do,
         keyword_else,
         keyword_elseif,
@@ -149,6 +151,7 @@ pub const Token = struct {
         return switch (self.id) {
             .keyword_and,
             .keyword_break,
+            .keyword_continue,
             .keyword_do,
             .keyword_else,
             .keyword_elseif,

@@ -40,6 +40,7 @@ pub const ParseError = error{
     ExpectedDifferentToken, // error_expected in lparser.c
     TooManyLocalVariables,
     NoLoopToBreak,
+    NoLoopToContinue,
     TooManySyntaxLevels,
     AmbiguousSyntax,
     VarArgOutsideVarArgFunction,
@@ -59,6 +60,7 @@ pub const parse_error_strings = AutoComptimeLookup(ParseError, []const u8, .{
     //.{ ParseError.ExpectedDifferentToken, ... }, this is context-specific
     .{ ParseError.TooManyLocalVariables, "too many local variables" },
     .{ ParseError.NoLoopToBreak, "no loop to break" },
+    .{ ParseError.NoLoopToContinue, "no loop to continue" },
     .{ ParseError.TooManySyntaxLevels, "chunk has too many syntax levels" },
     .{ ParseError.AmbiguousSyntax, "ambiguous syntax (function call x new statement)" },
     .{ ParseError.VarArgOutsideVarArgFunction, "cannot use '...' outside a vararg function" },
@@ -193,6 +195,7 @@ pub const Parser = struct {
             .keyword_do => return self.dostat(),
             .keyword_repeat => return self.repeatstat(),
             .keyword_break => return self.breakstat(),
+            .keyword_continue => return self.continuestat(),
             .keyword_for => return self.forstat(),
             .keyword_function => return self.funcstat(),
             else => return self.exprstat(),
@@ -385,6 +388,22 @@ pub const Parser = struct {
             .token = break_token,
         };
         return &break_statement.base;
+    }
+
+    fn continuestat(self: *Self) Error!*Node {
+        std.debug.assert(self.state.token.id == .keyword_continue);
+        const continue_token = self.state.token;
+        try self.nextToken();
+
+        if (!self.state.in_loop) {
+            return self.reportParseError(ParseError.NoLoopToContinue);
+        }
+
+        var continue_statement = try self.state.arena.create(Node.ContinueStatement);
+        continue_statement.* = .{
+            .token = continue_token,
+        };
+        return &continue_statement.base;
     }
 
     fn dostat(self: *Self) Error!*Node {
@@ -1799,6 +1818,55 @@ test "break statements" {
         \\   literal <number>
         \\  do
         \\  break_statement
+        \\
+    );
+}
+
+test "continue statements" {
+    try testParse("for i=1,2 do continue end",
+        \\chunk
+        \\ for_statement_numeric
+        \\  literal <number>
+        \\  literal <number>
+        \\ do
+        \\  continue_statement
+        \\
+    );
+    // continue just needs to be at the end of its immediate block, so wrapping it in a `do end`
+    // allows you to put a continue statement before the end of another block
+    try testParse("for i=1,2 do do continue end print(\"dead\") end",
+        \\chunk
+        \\ for_statement_numeric
+        \\  literal <number>
+        \\  literal <number>
+        \\ do
+        \\  do_statement
+        \\   continue_statement
+        \\  call
+        \\   identifier <name>
+        \\   (
+        \\    literal <string>
+        \\   )
+        \\
+    );
+    // continue in loop with nested loop
+    try testParse(
+        \\for i=1,2 do
+        \\  for j=1,2 do
+        \\  end
+        \\  continue
+        \\end
+    ,
+        \\chunk
+        \\ for_statement_numeric
+        \\  literal <number>
+        \\  literal <number>
+        \\ do
+        \\  for_statement_numeric
+        \\   literal <number>
+        \\   literal <number>
+        \\  do
+        \\  continue_statement
         \\
     );
 }
