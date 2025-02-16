@@ -1964,6 +1964,39 @@ test "assignment" {
     );
 }
 
+test "compound assignment" {
+    // like +=, -=, etc
+    try testParse("a += 1",
+        \\chunk
+        \\ compound_assignment_statement
+        \\  identifier <name>
+        \\ +
+        \\  literal <number>
+        \\
+    );
+
+    try testParse("a.b -= 1",
+        \\chunk
+        \\ compound_assignment_statement
+        \\  field_access .<name>
+        \\   identifier <name>
+        \\ -
+        \\  literal <number>
+        \\
+    );
+
+    try testParse("a.b.c //= 3",
+        \\chunk
+        \\ compound_assignment_statement
+        \\  field_access .<name>
+        \\   field_access .<name>
+        \\    identifier <name>
+        \\ //
+        \\  literal <number>
+        \\
+    );
+}
+
 test "assignment errors" {
     try expectParseError(ParseError.SyntaxError, "(a) = nil");
     try expectParseError(ParseError.UnexpectedSymbol, "(a)() = nil");

@@ -349,7 +349,7 @@ pub const Lexer = struct {
             }
         }
         var result = Token{
-            .id = Token.Id.eof,
+            .id = .eof,
             .start = start_index,
             .end = undefined,
             .char = null,
@@ -372,7 +372,7 @@ pub const Lexer = struct {
             if (veryVerboseLexing) std.debug.print(":{s}", .{@tagName(state)});
             // Check for tokens that are over the size limit here as a catch-all
             if (self.index - result.start >= self.max_lexical_element_size) {
-                return self.reportLexError(LexError.LexicalElementTooLong, result, Token.Id.eof);
+                return self.reportLexError(LexError.LexicalElementTooLong, result, .eof);
             }
             switch (state) {
                 State.start => switch (c) {
@@ -394,7 +394,7 @@ pub const Lexer = struct {
                     },
                     'a'...'z', 'A'...'Z', '_' => {
                         state = State.identifier;
-                        result.id = Token.Id.name;
+                        result.id = .name;
                     },
                     '0'...'9' => {
                         state = State.number;
@@ -406,7 +406,7 @@ pub const Lexer = struct {
                     '"', '\'' => {
                         state = State.string_literal;
                         string_delim = c;
-                        result.id = Token.Id.string;
+                        result.id = .string;
                     },
                     '.' => {
                         // this could be the start of .., ..., or a single .
@@ -420,7 +420,7 @@ pub const Lexer = struct {
                         expected_string_level = 0;
                     },
                     else => {
-                        result.id = Token.Id.single_char;
+                        result.id = .single_char;
                         self.index += 1;
                         break;
                     },
@@ -448,7 +448,7 @@ pub const Lexer = struct {
                         }
                     },
                     '\n', '\r' => {
-                        return self.reportLexError(LexError.UnfinishedString, result, Token.Id.string);
+                        return self.reportLexError(LexError.UnfinishedString, result, .string);
                     },
                     else => {},
                 },
@@ -460,14 +460,14 @@ pub const Lexer = struct {
                         string_escape_i += 1;
                         if (string_escape_i == 3) {
                             if (string_escape_n > std.math.maxInt(u8)) {
-                                return self.reportLexErrorInc(LexError.EscapeSequenceTooLarge, result, Token.Id.string);
+                                return self.reportLexErrorInc(LexError.EscapeSequenceTooLarge, result, .string);
                             }
                             state = State.string_literal;
                         }
                     },
                     '\r', '\n' => {
                         if (string_escape_i > 0) {
-                            return self.reportLexError(LexError.UnfinishedString, result, Token.Id.string);
+                            return self.reportLexError(LexError.UnfinishedString, result, .string);
                         }
                         state = State.string_literal_backslash_line_endings;
                         string_escape_line_ending = c;
@@ -487,7 +487,7 @@ pub const Lexer = struct {
                     '\r', '\n' => {
                         // can only escape \r\n or \n\r pairs, not \r\r or \n\n
                         if (c == string_escape_line_ending) {
-                            return self.reportLexError(LexError.UnfinishedString, result, Token.Id.string);
+                            return self.reportLexError(LexError.UnfinishedString, result, .string);
                         } else {
                             state = State.string_literal;
                         }
@@ -504,23 +504,23 @@ pub const Lexer = struct {
                         state = State.comment_start;
                     },
                     '>' => {
-                        result.id = Token.Id.skinny_arrow;
+                        result.id = .skinny_arrow;
                         self.index += 1;
                         break;
                     },
                     else => {
-                        result.id = Token.Id.single_char;
+                        result.id = .single_char;
                         break;
                     },
                 },
                 State.forward_slash => switch (c) {
                     '/' => {
-                        result.id = Token.Id.floor_div;
+                        result.id = .floor_div;
                         self.index += 1;
                         break;
                     },
                     else => {
-                        result.id = Token.Id.single_char;
+                        result.id = .single_char;
                         break;
                     },
                 },
@@ -570,9 +570,9 @@ pub const Lexer = struct {
                             // - Long strings with no sep chars is unaffected: [X does not give this error
                             //   (instead it will an give unexpected symbol error while parsing)
                             if (expected_string_level > 0) {
-                                return self.reportLexError(LexError.InvalidLongStringDelimiter, result, Token.Id.string);
+                                return self.reportLexError(LexError.InvalidLongStringDelimiter, result, .string);
                             } else {
-                                result.id = Token.Id.single_char;
+                                result.id = .single_char;
                                 break;
                             }
                         }
@@ -599,7 +599,7 @@ pub const Lexer = struct {
                                 state = State.start;
                             } else {
                                 self.index += 1;
-                                result.id = Token.Id.string;
+                                result.id = .string;
                                 break;
                             }
                         } else {
@@ -640,26 +640,26 @@ pub const Lexer = struct {
                         if (self.check_next_bug_compat and c == '\x00') {
                             state = State.concat;
                         } else {
-                            result.id = Token.Id.single_char;
+                            result.id = .single_char;
                             break;
                         }
                     },
                 },
                 State.concat => switch (c) {
                     '.' => {
-                        result.id = Token.Id.ellipsis;
+                        result.id = .ellipsis;
                         // include this .
                         self.index += 1;
                         break;
                     },
                     else => {
                         if (self.check_next_bug_compat and c == '\x00') {
-                            result.id = Token.Id.ellipsis;
+                            result.id = .ellipsis;
                             // include this .
                             self.index += 1;
                             break;
                         } else {
-                            result.id = Token.Id.concat;
+                            result.id = .concat;
                             break;
                         }
                     },
@@ -669,14 +669,14 @@ pub const Lexer = struct {
                     '.' => {
                         // multiple decimal points not allowed
                         if (number_is_float) {
-                            return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number);
+                            return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                         }
                         number_is_float = true;
                     },
                     'x', 'X' => {
                         // only 0x is allowed
                         if (number_starting_char != '0') {
-                            return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number);
+                            return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                         }
                         state = State.number_hex_start;
                     },
@@ -686,16 +686,16 @@ pub const Lexer = struct {
                     },
                     // 'a'...'z' minus e and x
                     'a'...'d', 'A'...'D', 'f'...'w', 'F'...'W', 'y'...'z', 'Y'...'Z' => {
-                        return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number);
+                        return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                     },
-                    '_' => return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number),
+                    '_' => return self.reportLexErrorInc(LexError.MalformedNumber, result, .number),
                     else => {
                         if (self.check_next_bug_compat and c == '\x00') {
                             state = State.number_exponent_start;
                             number_exponent_signed_char = null;
                             number_is_null_terminated = true;
                         } else {
-                            result.id = Token.Id.number;
+                            result.id = .number;
                             break;
                         }
                     },
@@ -705,11 +705,11 @@ pub const Lexer = struct {
                         state = State.number_hex;
                     },
                     'g'...'z', 'G'...'Z' => {
-                        return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number);
+                        return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                     },
-                    '_' => return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number),
+                    '_' => return self.reportLexErrorInc(LexError.MalformedNumber, result, .number),
                     else => {
-                        result.id = Token.Id.number;
+                        result.id = .number;
                         break;
                     },
                 },
@@ -721,7 +721,7 @@ pub const Lexer = struct {
                                 state = State.number_exponent;
                             },
                             else => {
-                                result.id = Token.Id.number;
+                                result.id = .number;
                                 break;
                             },
                         }
@@ -732,7 +732,7 @@ pub const Lexer = struct {
                                 if (number_exponent_signed_char) |_| {
                                     // this is an error because e.g. "1e--" would lex as "1e-" and "-"
                                     // and "1e-" is always invalid
-                                    return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number);
+                                    return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                                 }
                                 number_exponent_signed_char = c;
                             },
@@ -740,7 +740,7 @@ pub const Lexer = struct {
                                 // if we get here, then the token up to this point has to be
                                 // either 1e, 1e-, 1e+ which *must* be followed by a digit, and
                                 // we already know c is not a digit
-                                return self.reportLexErrorInc(LexError.MalformedNumber, result, Token.Id.number);
+                                return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                             },
                         }
                     }
@@ -751,16 +751,16 @@ pub const Lexer = struct {
                         switch (c) {
                             '0'...'9', 'a'...'z', 'A'...'Z', '_' => {},
                             else => {
-                                result.id = Token.Id.number;
+                                result.id = .number;
                                 break;
                             },
                         }
                     } else {
                         switch (c) {
                             '0'...'9' => {},
-                            'a'...'z', 'A'...'Z', '_' => return self.reportLexError(LexError.MalformedNumber, result, Token.Id.number),
+                            'a'...'z', 'A'...'Z', '_' => return self.reportLexError(LexError.MalformedNumber, result, .number),
                             else => {
-                                result.id = Token.Id.number;
+                                result.id = .number;
                                 break;
                             },
                         }
@@ -769,17 +769,17 @@ pub const Lexer = struct {
                 State.compound_equal => switch (c) {
                     '=' => {
                         switch (self.buffer[self.index - 1]) {
-                            '>' => result.id = Token.Id.ge,
-                            '<' => result.id = Token.Id.le,
-                            '~' => result.id = Token.Id.ne,
-                            '=' => result.id = Token.Id.eq,
+                            '>' => result.id = .ge,
+                            '<' => result.id = .le,
+                            '~' => result.id = .ne,
+                            '=' => result.id = .eq,
                             else => unreachable,
                         }
                         self.index += 1;
                         break;
                     },
                     else => {
-                        result.id = Token.Id.single_char;
+                        result.id = .single_char;
                         break;
                     },
                 },
@@ -801,19 +801,19 @@ pub const Lexer = struct {
                 State.dash,
                 State.compound_equal,
                 => {
-                    result.id = Token.Id.single_char;
+                    result.id = .single_char;
                 },
                 State.forward_slash => {
-                    result.id = Token.Id.single_char;
+                    result.id = .single_char;
                 },
                 State.concat => {
-                    result.id = Token.Id.concat;
+                    result.id = .concat;
                 },
                 State.number_exponent,
                 State.number_hex,
                 State.number,
                 => {
-                    result.id = Token.Id.number;
+                    result.id = .number;
                 },
                 State.comment_start,
                 State.short_comment,
@@ -823,9 +823,9 @@ pub const Lexer = struct {
                 },
                 State.long_string_start => {
                     if (expected_string_level > 0) {
-                        return self.reportLexError(LexError.InvalidLongStringDelimiter, result, Token.Id.string);
+                        return self.reportLexError(LexError.InvalidLongStringDelimiter, result, .string);
                     } else {
-                        result.id = Token.Id.single_char;
+                        result.id = .single_char;
                     }
                 },
                 // .eof is reported as the error context to conform with how PUC Lua reports unfinished <x> errors
@@ -835,21 +835,21 @@ pub const Lexer = struct {
                 // TODO revisit?
                 State.long_comment_possible_end,
                 State.long_comment,
-                => return self.reportLexError(LexError.UnfinishedLongComment, result, Token.Id.eof),
+                => return self.reportLexError(LexError.UnfinishedLongComment, result, .eof),
                 State.long_string_possible_end,
                 State.long_string,
-                => return self.reportLexError(LexError.UnfinishedLongString, result, Token.Id.eof),
+                => return self.reportLexError(LexError.UnfinishedLongString, result, .eof),
                 State.string_literal,
                 State.string_literal_backslash,
                 State.string_literal_backslash_line_endings,
-                => return self.reportLexError(LexError.UnfinishedString, result, Token.Id.eof),
+                => return self.reportLexError(LexError.UnfinishedString, result, .eof),
                 State.number_hex_start,
                 State.number_exponent_start,
                 => {
                     if (self.check_next_bug_compat and number_is_null_terminated) {
-                        result.id = Token.Id.number;
+                        result.id = .number;
                     } else {
-                        return self.reportLexError(LexError.MalformedNumber, result, Token.Id.number);
+                        return self.reportLexError(LexError.MalformedNumber, result, .number);
                     }
                 },
             }
@@ -863,7 +863,7 @@ pub const Lexer = struct {
             }
         }
 
-        if (result.id == Token.Id.single_char) {
+        if (result.id == .single_char) {
             result.char = self.buffer[result.start];
         }
 
@@ -937,7 +937,7 @@ pub const Lexer = struct {
                 .end = self.index,
                 .line_number = self.line_number,
                 .char = null,
-            }, Token.Id.eof);
+            }, .eof);
         }
         return self.line_number;
     }
@@ -966,178 +966,190 @@ pub const Lexer = struct {
 
 test "hello \"world\"" {
     try testLex("local hello = \"wor\\\"ld\"", &[_]Token.Id{
-        Token.Id.keyword_local,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.string,
+        .keyword_local,
+        .name,
+        .single_char,
+        .string,
     });
 }
 
 test "hello 'world'" {
     try testLex("local hello = 'wor\\'ld'", &[_]Token.Id{
-        Token.Id.keyword_local,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.string,
+        .keyword_local,
+        .name,
+        .single_char,
+        .string,
     });
 }
 
 test "strings" {
     // none of these escaped chars have any meaning, but Lua allows
     // any character to be escaped so this should lex just fine
-    try testLex("'\\e\\s\\c\\ any char'", &[_]Token.Id{Token.Id.string});
-    try testLex("'\\1'", &[_]Token.Id{Token.Id.string});
-    try testLex("'\\12'", &[_]Token.Id{Token.Id.string});
-    try testLex("'\\123'", &[_]Token.Id{Token.Id.string});
-    try testLex("'\\1234'", &[_]Token.Id{Token.Id.string});
+    try testLex("'\\e\\s\\c\\ any char'", &[_]Token.Id{.string});
+    try testLex("'\\1'", &[_]Token.Id{.string});
+    try testLex("'\\12'", &[_]Token.Id{.string});
+    try testLex("'\\123'", &[_]Token.Id{.string});
+    try testLex("'\\1234'", &[_]Token.Id{.string});
     // carriage returns and newlines can be escaped with \
-    try testLex("'\\\n\\\r'", &[_]Token.Id{Token.Id.string});
-    try testLex("\".\\\x0d\\\\\\\".\\\x0d\xa5[\\ArA\"", &[_]Token.Id{Token.Id.string});
+    try testLex("'\\\n\\\r'", &[_]Token.Id{.string});
+    try testLex("\".\\\x0d\\\\\\\".\\\x0d\xa5[\\ArA\"", &[_]Token.Id{.string});
     // a pair of CR/LF can be escaped with a single \ (either CRLF or LFCR)
-    try testLex("'\\\r\n'", &[_]Token.Id{Token.Id.string});
-    try testLex("'\\\n\r'", &[_]Token.Id{Token.Id.string});
+    try testLex("'\\\r\n'", &[_]Token.Id{.string});
+    try testLex("'\\\n\r'", &[_]Token.Id{.string});
 }
 
 test "long strings" {
-    try testLex("[[]]", &[_]Token.Id{Token.Id.string});
-    try testLex("[===[\nhello\nworld\n]===]", &[_]Token.Id{Token.Id.string});
-    try testLex("[]", &[_]Token.Id{ Token.Id.single_char, Token.Id.single_char });
+    try testLex("[[]]", &[_]Token.Id{.string});
+    try testLex("[===[\nhello\nworld\n]===]", &[_]Token.Id{.string});
+    try testLex("[]", &[_]Token.Id{ .single_char, .single_char });
     // TODO: this depends on LUA_COMPAT_LSTR
-    try testLex("[[ [[ ]]", &[_]Token.Id{Token.Id.string});
+    try testLex("[[ [[ ]]", &[_]Token.Id{.string});
     // this is always allowed
-    try testLex("[=[ [[ ]] ]=]", &[_]Token.Id{Token.Id.string});
+    try testLex("[=[ [[ ]] ]=]", &[_]Token.Id{.string});
     // unfinished end directly into real end
-    try testLex("[==[]=]==]", &[_]Token.Id{Token.Id.string});
+    try testLex("[==[]=]==]", &[_]Token.Id{.string});
 }
 
 test "comments and dashes" {
-    try testLex("-", &[_]Token.Id{Token.Id.single_char});
-    try testLex("a-b", &[_]Token.Id{ Token.Id.name, Token.Id.single_char, Token.Id.name });
+    try testLex("-", &[_]Token.Id{.single_char});
+    try testLex("a-b", &[_]Token.Id{ .name, .single_char, .name });
     try testLex("--", &[_]Token.Id{});
     try testLex("--local hello = 'wor\\'ld'", &[_]Token.Id{});
-    try testLex("--[this is a short comment\nreturn", &[_]Token.Id{Token.Id.keyword_return});
-    try testLex("--\rreturn", &[_]Token.Id{Token.Id.keyword_return});
+    try testLex("--[this is a short comment\nreturn", &[_]Token.Id{.keyword_return});
+    try testLex("--\rreturn", &[_]Token.Id{.keyword_return});
     try testLex("--[[local hello = 'wor\\'ld']]", &[_]Token.Id{});
     try testLex("--[==[\nlocal\nhello\n=\n'world'\n]==]", &[_]Token.Id{});
     try testLex("--[==", &[_]Token.Id{});
-    try testLex("--[\n]]", &[_]Token.Id{ Token.Id.single_char, Token.Id.single_char });
+    try testLex("--[\n]]", &[_]Token.Id{ .single_char, .single_char });
     // unfinished end directly into real end
     try testLex("--[===[]=]===]", &[_]Token.Id{});
 }
 
 test "whitespace" {
     // form feed
-    try testLex("_\x0c_W_", &[_]Token.Id{ Token.Id.name, Token.Id.name });
+    try testLex("_\x0c_W_", &[_]Token.Id{ .name, .name });
     // vertical tab
-    try testLex("_\x0b_W_", &[_]Token.Id{ Token.Id.name, Token.Id.name });
+    try testLex("_\x0b_W_", &[_]Token.Id{ .name, .name });
 }
 
 test "dots, concat, ellipsis" {
-    try testLex(".", &[_]Token.Id{Token.Id.single_char});
-    try testLex("a.b", &[_]Token.Id{ Token.Id.name, Token.Id.single_char, Token.Id.name });
-    try testLex("..", &[_]Token.Id{Token.Id.concat});
+    try testLex(".", &[_]Token.Id{.single_char});
+    try testLex("a.b", &[_]Token.Id{ .name, .single_char, .name });
+    try testLex("..", &[_]Token.Id{.concat});
     try testLex("a..b.c", &[_]Token.Id{
-        Token.Id.name,
-        Token.Id.concat,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.name,
+        .name,
+        .concat,
+        .name,
+        .single_char,
+        .name,
     });
     // this is valid Lua, apparently (abc will be true, test will be the first value in ...)
     try testLex("test=...abc=true", &[_]Token.Id{
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.ellipsis,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.keyword_true,
+        .name,
+        .single_char,
+        .ellipsis,
+        .name,
+        .single_char,
+        .keyword_true,
     });
 }
 
 test "= and compound = operators" {
-    try testLex("=", &[_]Token.Id{Token.Id.single_char});
-    try testLex("a=b", &[_]Token.Id{ Token.Id.name, Token.Id.single_char, Token.Id.name });
-    try testLex("a==b", &[_]Token.Id{ Token.Id.name, Token.Id.eq, Token.Id.name });
-    try testLex(">=", &[_]Token.Id{Token.Id.ge});
+    try testLex("=", &[_]Token.Id{.single_char});
+    try testLex("a=b", &[_]Token.Id{ .name, .single_char, .name });
+    try testLex("a==b", &[_]Token.Id{ .name, .eq, .name });
+    try testLex(">=", &[_]Token.Id{.ge});
     try testLex("if a~=b and a<=b and b<a then end", &[_]Token.Id{
-        Token.Id.keyword_if,
-        Token.Id.name,
-        Token.Id.ne,
-        Token.Id.name,
-        Token.Id.keyword_and,
-        Token.Id.name,
-        Token.Id.le,
-        Token.Id.name,
-        Token.Id.keyword_and,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.name,
-        Token.Id.keyword_then,
-        Token.Id.keyword_end,
+        .keyword_if,
+        .name,
+        .ne,
+        .name,
+        .keyword_and,
+        .name,
+        .le,
+        .name,
+        .keyword_and,
+        .name,
+        .single_char,
+        .name,
+        .keyword_then,
+        .keyword_end,
     });
+}
+
+test "compound operators" {
+    // like x += 1
+    try testLex("a+=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
+    try testLex("a-=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
+    try testLex("a*=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
+    try testLex("a/=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
+    try testLex("a%=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
+    try testLex("a^=b", &[_]Token.Id{ .name, .single_char, .single_char, .name });
+    try testLex("a..=b", &[_]Token.Id{ .name, .concat, .single_char, .name });
+    try testLex("a//=b", &[_]Token.Id{ .name, .floor_div, .single_char, .name });
 }
 
 test "numbers" {
     // from the Lua 5.1 manual
-    try testLex("3", &[_]Token.Id{Token.Id.number});
-    try testLex("3.0", &[_]Token.Id{Token.Id.number});
-    try testLex("3.1416", &[_]Token.Id{Token.Id.number});
-    try testLex("314.16e-2", &[_]Token.Id{Token.Id.number});
-    try testLex("0.31416E1", &[_]Token.Id{Token.Id.number});
-    try testLex("0xff", &[_]Token.Id{Token.Id.number});
-    try testLex("0x56", &[_]Token.Id{Token.Id.number});
+    try testLex("3", &[_]Token.Id{.number});
+    try testLex("3.0", &[_]Token.Id{.number});
+    try testLex("3.1416", &[_]Token.Id{.number});
+    try testLex("314.16e-2", &[_]Token.Id{.number});
+    try testLex("0.31416E1", &[_]Token.Id{.number});
+    try testLex("0xff", &[_]Token.Id{.number});
+    try testLex("0x56", &[_]Token.Id{.number});
 
     // other cases
-    try testLex(".1", &[_]Token.Id{Token.Id.number});
-    try testLex("0xFF", &[_]Token.Id{Token.Id.number});
-    try testLex("0XeF", &[_]Token.Id{Token.Id.number});
-    try testLex("1e+3", &[_]Token.Id{Token.Id.number});
+    try testLex(".1", &[_]Token.Id{.number});
+    try testLex("0xFF", &[_]Token.Id{.number});
+    try testLex("0XeF", &[_]Token.Id{.number});
+    try testLex("1e+3", &[_]Token.Id{.number});
     // 3e2 and .52 should lex as separate tokens
-    try testLex("3e2.52", &[_]Token.Id{ Token.Id.number, Token.Id.number });
+    try testLex("3e2.52", &[_]Token.Id{ .number, .number });
 }
 
 test "LexError.MalformedNumber" {
-    try expectLexError(LexError.MalformedNumber, testLex("1e", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0z", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0x", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0xabcz", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("1xabc", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1.e2", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1.", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1.2", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e3a", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e-", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e-a", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e+", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e--2", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e-)2", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0.1e+-2", &[_]Token.Id{Token.Id.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("1e", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0z", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0x", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0xabcz", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("1xabc", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1.e2", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1.", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1.2", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e3a", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e-", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e-a", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e+", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e--2", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e-)2", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0.1e+-2", &[_]Token.Id{.number}));
     // Lua's lexer weirdly 'allows'/consumes _ when lexing numbers (see llex.c:201 in 5.1.5),
     // but as far as I can tell there are no valid ways to define a number with a _ in it.
     // Either way, we should fail with MalformedNumber in the same ways that Lua does,
     // so we need to handle _ similarly to the Lua lexer.
-    try expectLexError(LexError.MalformedNumber, testLex("1_2", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0x2__", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("0x__", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("1e__", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex("1e-1_", &[_]Token.Id{Token.Id.number}));
-    try expectLexError(LexError.MalformedNumber, testLex(".1_", &[_]Token.Id{Token.Id.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("1_2", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0x2__", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("0x__", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("1e__", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex("1e-1_", &[_]Token.Id{.number}));
+    try expectLexError(LexError.MalformedNumber, testLex(".1_", &[_]Token.Id{.number}));
 }
 
 test "LexError.InvalidLongStringDelimiter" {
     // see comment in Lexer.next near the return of LexError.InvalidLongStringDelimiter
-    const simple = testLex("[==]", &[_]Token.Id{Token.Id.string});
+    const simple = testLex("[==]", &[_]Token.Id{.string});
     try expectLexError(LexError.InvalidLongStringDelimiter, simple);
 
-    const number = testLex("[=======4", &[_]Token.Id{Token.Id.string});
+    const number = testLex("[=======4", &[_]Token.Id{.string});
     try expectLexError(LexError.InvalidLongStringDelimiter, number);
 
-    const eof = testLex("[==", &[_]Token.Id{Token.Id.string});
+    const eof = testLex("[==", &[_]Token.Id{.string});
     try expectLexError(LexError.InvalidLongStringDelimiter, eof);
 }
 
 test "LexError.EscapeSequenceTooLarge" {
-    try expectLexError(LexError.EscapeSequenceTooLarge, testLex("'\\256'", &[_]Token.Id{Token.Id.string}));
+    try expectLexError(LexError.EscapeSequenceTooLarge, testLex("'\\256'", &[_]Token.Id{.string}));
 }
 
 test "LexError.UnfinishedLongComment" {
@@ -1150,63 +1162,63 @@ test "LexError.UnfinishedLongComment" {
 
 test "LexError.UnfinishedString" {
     const missingQuoteResult = testLex("local hello = \"wor\\\"ld", &[_]Token.Id{
-        Token.Id.keyword_local,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.string,
+        .keyword_local,
+        .name,
+        .single_char,
+        .string,
     });
     try expectLexError(LexError.UnfinishedString, missingQuoteResult);
 
     const newlineResult = testLex("local hello = \"wor\\\"ld\n\"", &[_]Token.Id{
-        Token.Id.keyword_local,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.string,
+        .keyword_local,
+        .name,
+        .single_char,
+        .string,
     });
     try expectLexError(LexError.UnfinishedString, newlineResult);
 }
 
 test "5.1 check_next bug compat on" {
-    try testLexCheckNextBugCompat(".\x00", &[_]Token.Id{Token.Id.concat});
-    try testLexCheckNextBugCompat(".\x00\x00", &[_]Token.Id{Token.Id.ellipsis});
-    try testLexCheckNextBugCompat("..\x00", &[_]Token.Id{Token.Id.ellipsis});
-    try testLexCheckNextBugCompat("1\x00", &[_]Token.Id{Token.Id.number});
-    try testLexCheckNextBugCompat("1\x00-5", &[_]Token.Id{Token.Id.number});
-    try testLexCheckNextBugCompat("1\x00\x005", &[_]Token.Id{Token.Id.number});
-    try testLexCheckNextBugCompat("1\x00\x00anythingcangoherenow", &[_]Token.Id{Token.Id.number});
-    try testLexCheckNextBugCompat(".0\x00", &[_]Token.Id{Token.Id.number});
-    try testLexCheckNextBugCompat(".0\x00)", &[_]Token.Id{ Token.Id.number, Token.Id.single_char });
+    try testLexCheckNextBugCompat(".\x00", &[_]Token.Id{.concat});
+    try testLexCheckNextBugCompat(".\x00\x00", &[_]Token.Id{.ellipsis});
+    try testLexCheckNextBugCompat("..\x00", &[_]Token.Id{.ellipsis});
+    try testLexCheckNextBugCompat("1\x00", &[_]Token.Id{.number});
+    try testLexCheckNextBugCompat("1\x00-5", &[_]Token.Id{.number});
+    try testLexCheckNextBugCompat("1\x00\x005", &[_]Token.Id{.number});
+    try testLexCheckNextBugCompat("1\x00\x00anythingcangoherenow", &[_]Token.Id{.number});
+    try testLexCheckNextBugCompat(".0\x00", &[_]Token.Id{.number});
+    try testLexCheckNextBugCompat(".0\x00)", &[_]Token.Id{ .number, .single_char });
     // should lex as: 5\x00z5 ; \x00 ; 9\x00\x00 ; \x00
     try testLexCheckNextBugCompat("5\x00z5\x009\x00\x00\x00", &[_]Token.Id{
-        Token.Id.number,
-        Token.Id.single_char,
-        Token.Id.number,
-        Token.Id.single_char,
+        .number,
+        .single_char,
+        .number,
+        .single_char,
     });
     try testLexCheckNextBugCompat("5\x00--z5", &[_]Token.Id{
-        Token.Id.number,
-        Token.Id.single_char,
-        Token.Id.name,
+        .number,
+        .single_char,
+        .name,
     });
-    try expectLexError(LexError.MalformedNumber, testLexCheckNextBugCompat("1e\x005", &[_]Token.Id{Token.Id.number}));
+    try expectLexError(LexError.MalformedNumber, testLexCheckNextBugCompat("1e\x005", &[_]Token.Id{.number}));
 }
 
 test "5.1 check_next bug compat off" {
-    try testLexNoCheckNextBugCompat(".\x00", &[_]Token.Id{ Token.Id.single_char, Token.Id.single_char });
-    try testLexNoCheckNextBugCompat("1\x00", &[_]Token.Id{ Token.Id.number, Token.Id.single_char });
-    try testLexNoCheckNextBugCompat("1\x00-5", &[_]Token.Id{ Token.Id.number, Token.Id.single_char, Token.Id.single_char, Token.Id.number });
+    try testLexNoCheckNextBugCompat(".\x00", &[_]Token.Id{ .single_char, .single_char });
+    try testLexNoCheckNextBugCompat("1\x00", &[_]Token.Id{ .number, .single_char });
+    try testLexNoCheckNextBugCompat("1\x00-5", &[_]Token.Id{ .number, .single_char, .single_char, .number });
     // should lex as: 5 ; \x00 ; z5 ; \x00 ; 9 ; \x00 ; \x00 ; \x00
     try testLexNoCheckNextBugCompat("5\x00z5\x009\x00\x00\x00", &[_]Token.Id{
-        Token.Id.number,
-        Token.Id.single_char,
-        Token.Id.name,
-        Token.Id.single_char,
-        Token.Id.number,
-        Token.Id.single_char,
-        Token.Id.single_char,
-        Token.Id.single_char,
+        .number,
+        .single_char,
+        .name,
+        .single_char,
+        .number,
+        .single_char,
+        .single_char,
+        .single_char,
     });
-    try expectLexError(LexError.MalformedNumber, testLexNoCheckNextBugCompat("1e\x005", &[_]Token.Id{Token.Id.number}));
+    try expectLexError(LexError.MalformedNumber, testLexNoCheckNextBugCompat("1e\x005", &[_]Token.Id{.number}));
 }
 
 fn expectLexError(expected: LexError, actual: anytype) !void {
@@ -1240,7 +1252,7 @@ fn testLexInitialized(lexer: *Lexer, expected_tokens: []const Token.Id) !void {
         try std.testing.expectEqual(expected_token_id, token.id);
     }
     const last_token = try lexer.next();
-    try std.testing.expectEqual(Token.Id.eof, last_token.id);
+    try std.testing.expectEqual(.eof, last_token.id);
 }
 
 test "line numbers" {
@@ -1250,28 +1262,28 @@ test "line numbers" {
         \\c
     ,
         &[_]TokenAndLineNumber{
-            .{ .id = Token.Id.name, .line_number = 1 },
-            .{ .id = Token.Id.name, .line_number = 2 },
-            .{ .id = Token.Id.name, .line_number = 3 },
-            .{ .id = Token.Id.eof, .line_number = 3 },
+            .{ .id = .name, .line_number = 1 },
+            .{ .id = .name, .line_number = 2 },
+            .{ .id = .name, .line_number = 3 },
+            .{ .id = .eof, .line_number = 3 },
         },
     );
     try testLexLineNumbers("\n\n\na", &[_]TokenAndLineNumber{
-        .{ .id = Token.Id.name, .line_number = 4 },
-        .{ .id = Token.Id.eof, .line_number = 4 },
+        .{ .id = .name, .line_number = 4 },
+        .{ .id = .eof, .line_number = 4 },
     });
     // \r\n pair separated by a comment
     try testLexLineNumbers("\r--comment\na", &[_]TokenAndLineNumber{
-        .{ .id = Token.Id.name, .line_number = 3 },
-        .{ .id = Token.Id.eof, .line_number = 3 },
+        .{ .id = .name, .line_number = 3 },
+        .{ .id = .eof, .line_number = 3 },
     });
 
     // line endings in comments should affect the line numbers of the tokens afterwards
     try testLexLineNumbers(
         "n--[[\n]]",
         &[_]TokenAndLineNumber{
-            .{ .id = Token.Id.name, .line_number = 1 },
-            .{ .id = Token.Id.eof, .line_number = 2 },
+            .{ .id = .name, .line_number = 1 },
+            .{ .id = .eof, .line_number = 2 },
         },
     );
 }
@@ -1289,7 +1301,7 @@ fn testLexLineNumbers(source: []const u8, expected_tokens: []const TokenAndLineN
         if (dumpTokensDuringTests) lexer.dump(&token);
         try std.testing.expectEqual(expected_token.id, token.id);
         try std.testing.expectEqual(expected_token.line_number, token.line_number);
-        if (token.id == Token.Id.eof) {
+        if (token.id == .eof) {
             return;
         }
     }
@@ -1312,7 +1324,7 @@ test "chunk has too many lines" {
             );
             break;
         };
-        if (token.id == Token.Id.eof) {
+        if (token.id == .eof) {
             unreachable;
         }
     }
@@ -1339,7 +1351,7 @@ test "lexical element too long" {
             );
             break;
         };
-        if (token.id == Token.Id.eof) {
+        if (token.id == .eof) {
             unreachable;
         }
     }

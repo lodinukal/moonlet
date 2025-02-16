@@ -393,7 +393,6 @@ pub const Node = struct {
                             // try writer.writeAll("\n");
                         }
                     }
-                    try writer.writeAll("\n");
                     try writer.writeByteNTimes(' ', indent);
                     try writer.writeAll("=\n");
                     for (assignment.values) |value_node| {
