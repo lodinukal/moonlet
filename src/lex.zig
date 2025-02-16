@@ -355,7 +355,7 @@ pub const Lexer = struct {
             .char = null,
             .line_number = self.line_number,
         };
-        var state = State.start;
+        var state: State = .start;
         var string_delim: u8 = undefined;
         var string_level: usize = 0;
         var expected_string_level: usize = 0;
@@ -375,7 +375,7 @@ pub const Lexer = struct {
                 return self.reportLexError(LexError.LexicalElementTooLong, result, .eof);
             }
             switch (state) {
-                State.start => switch (c) {
+                .start => switch (c) {
                     '\n', '\r' => {
                         result.start = self.index + 1;
                         result.line_number = try self.incrementLineNumber(&last_line_ending_index);
@@ -387,36 +387,36 @@ pub const Lexer = struct {
                     },
                     '-' => {
                         // this could be the start of a comment, a long comment, or a single -
-                        state = State.dash;
+                        state = .dash;
                     },
                     '/' => {
-                        state = State.forward_slash;
+                        state = .forward_slash;
                     },
                     'a'...'z', 'A'...'Z', '_' => {
-                        state = State.identifier;
+                        state = .identifier;
                         result.id = .name;
                     },
                     '0'...'9' => {
-                        state = State.number;
+                        state = .number;
                         number_starting_char = c;
                         if (self.check_next_bug_compat) {
                             number_is_null_terminated = false;
                         }
                     },
                     '"', '\'' => {
-                        state = State.string_literal;
+                        state = .string_literal;
                         string_delim = c;
                         result.id = .string;
                     },
                     '.' => {
                         // this could be the start of .., ..., or a single .
-                        state = State.dot;
+                        state = .dot;
                     },
                     '>', '<', '~', '=' => {
-                        state = State.compound_equal;
+                        state = .compound_equal;
                     },
                     '[' => {
-                        state = State.long_string_start;
+                        state = .long_string_start;
                         expected_string_level = 0;
                     },
                     else => {
@@ -425,7 +425,7 @@ pub const Lexer = struct {
                         break;
                     },
                 },
-                State.identifier => switch (c) {
+                .identifier => switch (c) {
                     'a'...'z', 'A'...'Z', '_', '0'...'9' => {},
                     else => {
                         const name = self.buffer[result.start..self.index];
@@ -435,9 +435,9 @@ pub const Lexer = struct {
                         break;
                     },
                 },
-                State.string_literal => switch (c) {
+                .string_literal => switch (c) {
                     '\\' => {
-                        state = State.string_literal_backslash;
+                        state = .string_literal_backslash;
                         string_escape_i = 0;
                         string_escape_n = 0;
                     },
@@ -452,7 +452,7 @@ pub const Lexer = struct {
                     },
                     else => {},
                 },
-                State.string_literal_backslash => switch (c) {
+                .string_literal_backslash => switch (c) {
                     '0'...'9' => {
                         // Validate that any \ddd escape sequences can actually fit
                         // in a byte
@@ -462,14 +462,14 @@ pub const Lexer = struct {
                             if (string_escape_n > std.math.maxInt(u8)) {
                                 return self.reportLexErrorInc(LexError.EscapeSequenceTooLarge, result, .string);
                             }
-                            state = State.string_literal;
+                            state = .string_literal;
                         }
                     },
                     '\r', '\n' => {
                         if (string_escape_i > 0) {
                             return self.reportLexError(LexError.UnfinishedString, result, .string);
                         }
-                        state = State.string_literal_backslash_line_endings;
+                        state = .string_literal_backslash_line_endings;
                         string_escape_line_ending = c;
                         result.line_number = try self.incrementLineNumber(&last_line_ending_index);
                     },
@@ -480,28 +480,28 @@ pub const Lexer = struct {
                         if (string_escape_i > 0) {
                             self.index -= 1;
                         }
-                        state = State.string_literal;
+                        state = .string_literal;
                     },
                 },
-                State.string_literal_backslash_line_endings => switch (c) {
+                .string_literal_backslash_line_endings => switch (c) {
                     '\r', '\n' => {
                         // can only escape \r\n or \n\r pairs, not \r\r or \n\n
                         if (c == string_escape_line_ending) {
                             return self.reportLexError(LexError.UnfinishedString, result, .string);
                         } else {
-                            state = State.string_literal;
+                            state = .string_literal;
                         }
                         result.line_number = try self.incrementLineNumber(&last_line_ending_index);
                     },
                     else => {
                         // backtrack so that we don't escape the current char
                         self.index -= 1;
-                        state = State.string_literal;
+                        state = .string_literal;
                     },
                 },
-                State.dash => switch (c) {
+                .dash => switch (c) {
                     '-' => {
-                        state = State.comment_start;
+                        state = .comment_start;
                     },
                     '>' => {
                         result.id = .skinny_arrow;
@@ -513,7 +513,7 @@ pub const Lexer = struct {
                         break;
                     },
                 },
-                State.forward_slash => switch (c) {
+                .forward_slash => switch (c) {
                     '/' => {
                         result.id = .floor_div;
                         self.index += 1;
@@ -524,39 +524,39 @@ pub const Lexer = struct {
                         break;
                     },
                 },
-                State.comment_start => switch (c) {
+                .comment_start => switch (c) {
                     '[' => {
-                        state = State.long_comment_start;
+                        state = .long_comment_start;
                         expected_string_level = 0;
                     },
                     '\r', '\n' => {
                         // comment immediately ends
                         result.start = self.index + 1;
-                        state = State.start;
+                        state = .start;
                         result.line_number = try self.incrementLineNumber(&last_line_ending_index);
                     },
                     else => {
-                        state = State.short_comment;
+                        state = .short_comment;
                     },
                 },
-                State.long_string_start,
-                State.long_comment_start,
+                .long_string_start,
+                .long_comment_start,
                 => switch (c) {
                     '=' => {
                         expected_string_level += 1;
                     },
                     '[' => {
-                        state = if (state == State.long_comment_start) State.long_comment else State.long_string;
+                        state = if (state == .long_comment_start) .long_comment else .long_string;
                     },
                     else => {
-                        if (state == State.long_comment_start) {
+                        if (state == .long_comment_start) {
                             if (c == '\n' or c == '\r') {
                                 // not a long comment, but the short comment ends immediately
                                 result.start = self.index + 1;
-                                state = State.start;
+                                state = .start;
                                 result.line_number = try self.incrementLineNumber(&last_line_ending_index);
                             } else {
-                                state = State.short_comment;
+                                state = .short_comment;
                             }
                         } else {
                             // Lua makes the pattern [=X where X is anything but [ or = an explicit
@@ -578,25 +578,25 @@ pub const Lexer = struct {
                         }
                     },
                 },
-                State.long_string,
-                State.long_comment,
+                .long_string,
+                .long_comment,
                 => switch (c) {
                     ']' => {
-                        state = if (state == State.long_comment) State.long_comment_possible_end else State.long_string_possible_end;
+                        state = if (state == .long_comment) .long_comment_possible_end else .long_string_possible_end;
                         string_level = 0;
                     },
                     else => {
                         result.line_number = try self.maybeIncrementLineNumber(&last_line_ending_index);
                     },
                 },
-                State.long_string_possible_end,
-                State.long_comment_possible_end,
+                .long_string_possible_end,
+                .long_comment_possible_end,
                 => switch (c) {
                     ']' => {
                         if (string_level == expected_string_level) {
-                            if (state == State.long_comment_possible_end) {
+                            if (state == .long_comment_possible_end) {
                                 result.start = self.index + 1;
-                                state = State.start;
+                                state = .start;
                             } else {
                                 self.index += 1;
                                 result.id = .string;
@@ -613,23 +613,23 @@ pub const Lexer = struct {
                     },
                     else => {
                         result.line_number = try self.maybeIncrementLineNumber(&last_line_ending_index);
-                        state = if (state == State.long_comment_possible_end) State.long_comment else State.long_string;
+                        state = if (state == .long_comment_possible_end) .long_comment else .long_string;
                     },
                 },
-                State.short_comment => switch (c) {
+                .short_comment => switch (c) {
                     '\n', '\r' => {
                         result.start = self.index + 1;
-                        state = State.start;
+                        state = .start;
                         result.line_number = try self.incrementLineNumber(&last_line_ending_index);
                     },
                     else => {},
                 },
-                State.dot => switch (c) {
+                .dot => switch (c) {
                     '.' => {
-                        state = State.concat;
+                        state = .concat;
                     },
                     '0'...'9' => {
-                        state = State.number;
+                        state = .number;
                         number_starting_char = '.';
                         number_is_float = true;
                         if (self.check_next_bug_compat) {
@@ -638,14 +638,14 @@ pub const Lexer = struct {
                     },
                     else => {
                         if (self.check_next_bug_compat and c == '\x00') {
-                            state = State.concat;
+                            state = .concat;
                         } else {
                             result.id = .single_char;
                             break;
                         }
                     },
                 },
-                State.concat => switch (c) {
+                .concat => switch (c) {
                     '.' => {
                         result.id = .ellipsis;
                         // include this .
@@ -664,7 +664,7 @@ pub const Lexer = struct {
                         }
                     },
                 },
-                State.number => switch (c) {
+                .number => switch (c) {
                     '0'...'9' => {},
                     '.' => {
                         // multiple decimal points not allowed
@@ -678,10 +678,10 @@ pub const Lexer = struct {
                         if (number_starting_char != '0') {
                             return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
                         }
-                        state = State.number_hex_start;
+                        state = .number_hex_start;
                     },
                     'e', 'E' => {
-                        state = State.number_exponent_start;
+                        state = .number_exponent_start;
                         number_exponent_signed_char = null;
                     },
                     // 'a'...'z' minus e and x
@@ -691,7 +691,7 @@ pub const Lexer = struct {
                     '_' => return self.reportLexErrorInc(LexError.MalformedNumber, result, .number),
                     else => {
                         if (self.check_next_bug_compat and c == '\x00') {
-                            state = State.number_exponent_start;
+                            state = .number_exponent_start;
                             number_exponent_signed_char = null;
                             number_is_null_terminated = true;
                         } else {
@@ -700,9 +700,9 @@ pub const Lexer = struct {
                         }
                     },
                 },
-                State.number_hex_start, State.number_hex => switch (c) {
+                .number_hex_start, .number_hex => switch (c) {
                     '0'...'9', 'a'...'f', 'A'...'F' => {
-                        state = State.number_hex;
+                        state = .number_hex;
                     },
                     'g'...'z', 'G'...'Z' => {
                         return self.reportLexErrorInc(LexError.MalformedNumber, result, .number);
@@ -713,12 +713,12 @@ pub const Lexer = struct {
                         break;
                     },
                 },
-                State.number_exponent_start => {
+                .number_exponent_start => {
                     const should_consume_anything = self.check_next_bug_compat and number_is_null_terminated;
                     if (should_consume_anything) {
                         switch (c) {
                             '\x00', '-', '+', '0'...'9', 'a'...'z', 'A'...'Z', '_' => {
-                                state = State.number_exponent;
+                                state = .number_exponent;
                             },
                             else => {
                                 result.id = .number;
@@ -727,7 +727,7 @@ pub const Lexer = struct {
                         }
                     } else {
                         switch (c) {
-                            '0'...'9' => state = State.number_exponent,
+                            '0'...'9' => state = .number_exponent,
                             '-', '+' => {
                                 if (number_exponent_signed_char) |_| {
                                     // this is an error because e.g. "1e--" would lex as "1e-" and "-"
@@ -745,7 +745,7 @@ pub const Lexer = struct {
                         }
                     }
                 },
-                State.number_exponent => {
+                .number_exponent => {
                     const should_consume_anything = self.check_next_bug_compat and number_is_null_terminated;
                     if (should_consume_anything) {
                         switch (c) {
@@ -766,7 +766,7 @@ pub const Lexer = struct {
                         }
                     }
                 },
-                State.compound_equal => switch (c) {
+                .compound_equal => switch (c) {
                     '=' => {
                         switch (self.buffer[self.index - 1]) {
                             '>' => result.id = .ge,
@@ -790,38 +790,38 @@ pub const Lexer = struct {
             // rather only when the loop condition fails
             std.debug.assert(self.index == self.buffer.len);
             switch (state) {
-                State.start => {},
-                State.identifier => {
+                .start => {},
+                .identifier => {
                     const name = self.buffer[result.start..self.index];
                     if (Token.Keyword.idFromName(name)) |id| {
                         result.id = id;
                     }
                 },
-                State.dot,
-                State.dash,
-                State.compound_equal,
+                .dot,
+                .dash,
+                .compound_equal,
                 => {
                     result.id = .single_char;
                 },
-                State.forward_slash => {
+                .forward_slash => {
                     result.id = .single_char;
                 },
-                State.concat => {
+                .concat => {
                     result.id = .concat;
                 },
-                State.number_exponent,
-                State.number_hex,
-                State.number,
+                .number_exponent,
+                .number_hex,
+                .number,
                 => {
                     result.id = .number;
                 },
-                State.comment_start,
-                State.short_comment,
-                State.long_comment_start,
+                .comment_start,
+                .short_comment,
+                .long_comment_start,
                 => {
                     result.start = self.index;
                 },
-                State.long_string_start => {
+                .long_string_start => {
                     if (expected_string_level > 0) {
                         return self.reportLexError(LexError.InvalidLongStringDelimiter, result, .string);
                     } else {
@@ -833,18 +833,18 @@ pub const Lexer = struct {
                 // isn't used for the unfinished string errors in this case, though--the error message seems nicer
                 // that way
                 // TODO revisit?
-                State.long_comment_possible_end,
-                State.long_comment,
+                .long_comment_possible_end,
+                .long_comment,
                 => return self.reportLexError(LexError.UnfinishedLongComment, result, .eof),
-                State.long_string_possible_end,
-                State.long_string,
+                .long_string_possible_end,
+                .long_string,
                 => return self.reportLexError(LexError.UnfinishedLongString, result, .eof),
-                State.string_literal,
-                State.string_literal_backslash,
-                State.string_literal_backslash_line_endings,
+                .string_literal,
+                .string_literal_backslash,
+                .string_literal_backslash_line_endings,
                 => return self.reportLexError(LexError.UnfinishedString, result, .eof),
-                State.number_hex_start,
-                State.number_exponent_start,
+                .number_hex_start,
+                .number_exponent_start,
                 => {
                     if (self.check_next_bug_compat and number_is_null_terminated) {
                         result.id = .number;
